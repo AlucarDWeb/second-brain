@@ -1,0 +1,11 @@
+# macOS
+.DS_Store
+
+# Obsidian — local UI state & cache (shared config app.json/appearance.json/core-plugins.json IS committed)
+.obsidian/workspace.json
+.obsidian/workspace-mobile.json
+.obsidian/cache
+.trash/
+
+# Claude Code — local/private settings only (.claude/commands/ IS committed; it's part of the system)
+.claude/settings.local.json
