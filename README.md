@@ -1,4 +1,4 @@
-# knowledge_brain
+# second_brain
 
 An **LLM-maintained knowledge wiki** for any domain you choose, built in the style of Andrej Karpathy's
 knowledge system.
