@@ -54,7 +54,15 @@ Optional argument — restrict to specific sources: $ARGUMENTS
    sorted, with an updated count and `updated:` date. `_INDEX.md` is **not itself a concept** — never link
    to it from Sources/Maps and never treat it as a note to compile.
 
-8. **Report:** new Sources, new Concepts, extended Concepts, new/updated Maps, and any
-   **gaps or contradictions** you noticed (for `/lint` follow-up). Do not invent facts — only use what the sources say.
+8. **Regenerate the HTML visualization layer.** After all notes, Maps, and `_INDEX.md` are written,
+   rebuild `views/` from the vault by running `python3 generate_views.py` from the vault root. This
+   derives the standalone graph + per-note pages from the current frontmatter and wikilinks — the vault
+   stays the source of truth; `views/` is wiped and rebuilt each run, so never hand-edit it. Confirm the
+   run's summary line (note count + resolved links) and surface it in the report. If nothing was compiled
+   in step 1 (no new/changed sources), skip this step.
+
+9. **Report:** new Sources, new Concepts, extended Concepts, new/updated Maps, whether `views/` was
+   regenerated (with its count), and any **gaps or contradictions** you noticed (for `/lint` follow-up).
+   Do not invent facts — only use what the sources say.
 
 Never modify files in `Clippings/`.
