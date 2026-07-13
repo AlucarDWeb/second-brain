@@ -11,7 +11,14 @@ Optional argument — restrict to specific sources: $ARGUMENTS
 
 1. **Find work.** List `Clippings/`. For each clipping, check whether a matching note exists in `Sources/`
    (match on title/`clipping:` frontmatter). Build the set of *new or changed* sources to process.
-   If `$ARGUMENTS` is given, restrict to those. Report what you'll process before doing it.
+   - **When `$ARGUMENTS` is given, treat it as the authoritative changed set** — the content-hash
+     fetcher (`tools/fetch/run.py`) emits exactly the clippings whose bytes changed upstream. For each
+     named clipping **re-read it and update its existing Source even if one already exists** (do not skip
+     it as "already compiled"): refresh the Source's summary/claims, re-extract concepts, re-run the
+     conflict / supersession / ⏳ rules against the new content, and **bump `updated:`** on every note you
+     touch. This closes the "new-only" gap where an edited same-name doc used to go stale.
+   - When `$ARGUMENTS` is empty, process every clipping that has no corresponding note in `Sources/`.
+   Report what you'll process before doing it.
 
 2. **Read each new source** fully from `Clippings/`.
 

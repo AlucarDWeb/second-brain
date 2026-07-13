@@ -1,0 +1,41 @@
+# tools/fetch/sources.yaml — declarative list of upstream sources to mirror.
+#
+# This is the "manifest core" build: only the dependency-free `local` adapter is
+# wired up. It hashes files already sitting in Clippings/ against the content-hash
+# manifest (manifest.json) so that an *edited* clipping is re-detected and re-compiled
+# — fixing the "new-only" gap where a same-name doc used to go stale silently.
+#
+# Remote adapters (github_docs, confluence, gdrive_gemini, amplitude) are Phase 1+.
+# They plug into the same seam: add a block here, drop a module in adapters/, and
+# run.py picks it up by `type`. They are intentionally NOT implemented yet because
+# they require token secrets and network access. Stub blocks are shown commented out.
+#
+# Supported value shapes (dependency-free parser): bare/quoted scalars, true/false,
+# and inline lists [a, b, c]. Keep it flat — one level of keys under each `- ` item.
+
+sources:
+  # The local raw-input drop. Everything the human clips into Clippings/ is hashed
+  # here so change detection works with zero external dependencies.
+  - id: clippings
+    type: local
+    glob: [Clippings/**/*.md, Clippings/**/*.txt, Clippings/**/*.pdf]
+
+  # --- Phase 1+ (not implemented in the manifest-core build) ---------------------
+  #
+  # - id: gh-docs
+  #   type: github_docs          # adapters/github_docs.py — gh REST, path globs @branch
+  #   repo: org/product-docs
+  #   branch: main
+  #   path_globs: [docs/**/*.md]
+  #
+  # - id: confluence-eng
+  #   type: confluence           # adapters/confluence.py — Cloud REST v2 (token+email)
+  #   space: ENG
+  #
+  # - id: amplitude-readouts
+  #   type: amplitude            # adapters/amplitude.py — API key/secret, chart readouts
+  #   charts: [abc123, def456]
+  #
+  # - id: gemini-notes
+  #   type: gdrive_gemini        # adapters/gdrive_gemini.py — Drive/Docs, service account
+  #   folder_id: "1AbC..."
