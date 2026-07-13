@@ -12,6 +12,10 @@
 # Claude Code — local/private settings only (.claude/commands/ IS committed; it's part of the system)
 .claude/settings.local.json
 
+# Python — compiled bytecode from tools/ (fetch pipeline)
+__pycache__/
+*.pyc
+
 # Content is ignored
 views/
 Clippings/

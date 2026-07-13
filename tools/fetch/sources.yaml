@@ -16,9 +16,11 @@
 sources:
   # The local raw-input drop. Everything the human clips into Clippings/ is hashed
   # here so change detection works with zero external dependencies.
+  # Every file dropped into Clippings/ is a source (markdown, html, pdf, json, txt …),
+  # so the glob is extension-agnostic; the adapter skips dirs and dotfiles.
   - id: clippings
     type: local
-    glob: [Clippings/**/*.md, Clippings/**/*.txt, Clippings/**/*.pdf]
+    glob: [Clippings/**/*]
 
   # --- Phase 1+ (not implemented in the manifest-core build) ---------------------
   #

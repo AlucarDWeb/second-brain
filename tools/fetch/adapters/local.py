@@ -36,7 +36,8 @@ def fetch(cfg: dict, vault_root: Path):
         abs_pattern = os.path.join(str(vault_root), pattern)
         for match in glob.glob(abs_pattern, recursive=True):
             p = Path(match)
-            if not p.is_file() or p.name == ".gitkeep":
+            # Skip directories and dotfiles (.gitkeep, .DS_Store, …) — only real sources.
+            if not p.is_file() or p.name.startswith("."):
                 continue
             if p in seen:
                 continue
