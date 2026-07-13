@@ -38,6 +38,7 @@ Clippings/  ──/compile──▶  Sources/ + Concepts/ + Maps/  ──/ask─
 | `Sources/`   | One **summary note per source**: key claims, takeaways, links to the concepts it supports. | Claude |
 | `Concepts/`  | **Atomic concept articles** — one idea per file. The heart of the wiki, cross-linked. | Claude |
 | `Maps/`      | **Maps of Content** — hub notes grouping concepts by theme. `Maps/Index.md` is the entry point. | Claude |
+| `tools/fetch/` | **Change-detection layer** — hashes each source in `Clippings/` against a manifest so *edited* sources get re-compiled, not just new ones. See below. | System |
 
 `CLAUDE.md` holds the full conventions and rules Claude follows. You don't need to read it to use the
 system — it's there so Claude has the right context automatically whenever it runs in this folder.
@@ -75,7 +76,25 @@ Claude reads every new clipping, writes a Source summary, extracts atomic Concep
 ones instead of duplicating), links everything both ways, and slots each concept into a Map. It reports
 what it created, plus any gaps, contradictions, or time-bound claims it noticed.
 
-Restrict to specific sources with an argument, e.g. `/compile the Smith 2024 paper`.
+Restrict to specific sources with an argument, e.g. `/compile the Smith 2024 paper`. Passing an explicit
+source now **re-reads and updates** its Source even if one already exists (re-running the conflict and
+`⏳` rules and bumping `updated:`) — so an edited clipping no longer goes stale.
+
+### Change detection (`tools/fetch/`)
+`/compile` on its own only spots *new* clippings — an edited same-name source would be treated as
+already-done and go stale. The fetch layer closes that gap. Run:
+
+```
+python3 tools/fetch/run.py            # hash Clippings/ vs the manifest, print what changed
+python3 tools/fetch/run.py --dry-run  # same, but don't touch the manifest
+```
+
+It sha256-hashes every file in `Clippings/` against `tools/fetch/manifest.json` and prints the
+**changed** set (new + content-changed), which you can hand straight to `/compile <changed>`. Unchanged
+sources are skipped; upstream deletions are reported, never auto-applied. Sources are declared in
+`tools/fetch/sources.yaml` — this template ships only the dependency-free `local` adapter (hashing files
+already in `Clippings/`); remote adapters (GitHub, Confluence, …) and scheduled CI are a later phase and
+plug into the same `adapters/` seam. No third-party Python packages required.
 
 ### 3. Browse
 Open the vault in Obsidian. Start at `Maps/Index.md`, follow `[[wikilinks]]`, use **backlinks** to see what
@@ -137,5 +156,6 @@ Full details are in `CLAUDE.md`.
 3. Run `/compile`.
 4. Run `/ask` against what you've built.
 
-The vault starts empty (apart from this README, `CLAUDE.md`, and the `Maps/` scaffolding). Your first
-`/compile` will populate `Sources/`, `Concepts/`, and `Maps/` — start at `Maps/Index.md`.
+The vault starts empty (apart from this README, `CLAUDE.md`, the `Maps/` scaffolding, and the
+`tools/fetch/` pipeline). Your first `/compile` will populate `Sources/`, `Concepts/`, and `Maps/` —
+start at `Maps/Index.md`.
