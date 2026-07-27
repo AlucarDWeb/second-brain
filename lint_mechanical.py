@@ -69,11 +69,12 @@ def main() -> int:
 
     notes, alias_index = load_notes()
     clipping_files = [p for p in CLIPPINGS.iterdir() if p.is_file() and not p.name.startswith(".")]
-    clipping_stems = {p.stem for p in clipping_files}
+    # Obsidian links markdown by stem ([[foo]]) but non-markdown files by full
+    # filename ([[foo.pdf]]) — accept both forms, canonicalized to the stem.
+    clipping_by_ref = {p.stem.lower(): p.stem for p in clipping_files}
+    clipping_by_ref.update({p.name.lower(): p.stem for p in clipping_files})
     clipping_names = {p.stem: p.name for p in clipping_files}
-    valid_targets = {t.lower() for t in notes} | set(alias_index) | {
-        s.lower() for s in clipping_stems
-    }
+    valid_targets = {t.lower() for t in notes} | set(alias_index) | set(clipping_by_ref)
 
     outbound: dict[str, set[str]] = defaultdict(set)   # title -> resolved note targets
     inbound: dict[str, set[str]] = defaultdict(set)
@@ -224,13 +225,14 @@ def main() -> int:
         target = wikilink_target(raw.strip().strip("[]"))
         if not target:
             continue  # missing pointer already flagged in 3a
-        if target in clipping_stems:
-            pointer_of[target].append(title)
+        stem = clipping_by_ref.get(target.lower())
+        if stem:
+            pointer_of[stem].append(title)
         else:
             broken_pointers.append(
                 f"Sources/{title}.md — clipping pointer [[{target}]] matches no file in Clippings/"
             )
-    unprocessed = sorted(clipping_stems - set(pointer_of))
+    unprocessed = sorted(set(clipping_names) - set(pointer_of))
     multi = [
         f"Clippings/{clipping_names[c]} ← {len(srcs)} sources ({', '.join(srcs)})"
         for c, srcs in sorted(pointer_of.items())
@@ -265,7 +267,7 @@ def main() -> int:
 
     print(
         f"\nSummary: {findings} finding(s) · {n_concepts} concepts · {n_sources} sources · "
-        f"{len(themed_maps)} themed maps · {len(clipping_stems)} clippings "
+        f"{len(themed_maps)} themed maps · {len(clipping_names)} clippings "
         f"({len(unprocessed)} unprocessed)"
     )
     return 0
