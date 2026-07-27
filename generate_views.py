@@ -129,20 +129,27 @@ def load_notes():
 
 
 def resolve_links(notes, alias_index):
+    unresolved = []  # (note, raw target) — reported at the end of the run
     for note in notes.values():
         seen = set()
+        missing = set()
         for raw in WIKILINK_RE.findall(note["body"]):
             target = wikilink_target(raw)
             resolved = alias_index.get(target.lower())
-            if resolved and resolved != note["title"] and resolved not in seen:
-                seen.add(resolved)
-                note["links_out"].append(resolved)
+            if resolved:
+                if resolved != note["title"] and resolved not in seen:
+                    seen.add(resolved)
+                    note["links_out"].append(resolved)
+            elif target and target.lower() not in missing:
+                missing.add(target.lower())
+                unresolved.append((note, target))
     # backlinks
     for note in notes.values():
         for tgt in note["links_out"]:
             notes[tgt]["backlinks"].append(note["title"])
     for note in notes.values():
         note["backlinks"] = sorted(set(note["backlinks"]))
+    return unresolved
 
 
 # --------------------------------------------------------------------------- #
@@ -798,7 +805,7 @@ GRAPH_JS = r"""
 
 def main():
     notes, alias_index = load_notes()
-    resolve_links(notes, alias_index)
+    unresolved = resolve_links(notes, alias_index)
 
     if OUT.exists():
         shutil.rmtree(OUT)
@@ -816,6 +823,10 @@ def main():
 
     n_links = sum(len(n["links_out"]) for n in notes.values())
     print(f"Generated views/ from {len(notes)} notes ({n_links} resolved links).")
+    if unresolved:
+        print(f"  {len(unresolved)} unresolved link(s):")
+        for note, target in unresolved:
+            print(f"    - {note['folder']}/{note['title']}.md -> [[{target}]]")
     print(f"  open: {OUT / 'index.html'}")
 
 

@@ -1,177 +1,119 @@
-# Optimization Plan for knowledge-brain Vault
+# Optimization Plan for knowledge-brain Vault (v2)
 
-**Status:** Approved  
-**Date:** 2026-07-25  
-**Scope:** Comprehensive improvements (performance, robustness, commands)  
-**Constraints:** Zero Python dependencies, no test suite, no CI/CD, no remote adapters  
-
----
-
-## Executive Summary
-
-The vault has a solid foundation (zero dependencies, clean architecture, coherent command system) with immediate gaps that should be fixed. This plan covers Phase 1 (immediate fixes), Phase 2 (performance), and Phase 3 (command enhancements).
+**Status:** Candidate
+**Date:** 2026-07-27
+**Scope:** Only improvements verified against the actual code
+**Constraints:** Zero Python dependencies, no test suite, no CI/CD, no remote adapters
 
 ---
 
-## Phase 1: Immediate Fixes
+## Context
 
-### 1.1 Add manifest.json to .gitignore
+v1 of this plan was written from the directory layout rather than the file contents. An audit
+against the code dropped roughly half of it: several "problems" don't exist (the scripts already
+print progress; the manifest is empty because `Clippings/` is empty, not because of a bug), and two
+fixes would have broken working behavior (`include_extensions` contradicts the intentionally
+extension-agnostic glob in `sources.yaml`; the proposed schema validator required a `path` key the
+real config doesn't use). What follows is only what survived, each item verified in the code.
 
-**Problem:** `manifest.json` tracks local change state and shouldn't be committed.
+Total effort: **~45 minutes.**
+
+---
+
+## 1. Untrack generated/local files from git
+
+**Verified problem:** `git ls-files` shows these tracked despite `.gitignore` rules:
+
+- `tools/fetch/manifest.json` — local change-detection state. It describes files in `Clippings/`,
+  which is itself gitignored, so committing it records state about content git can't see, and it
+  will churn on every fetch.
+- `tools/fetch/adapters/__pycache__/*.pyc` — `.gitignore` has `__pycache__/`, but gitignore never
+  untracks files that were already committed.
 
 **Fix:**
-```gitignore
-# In .gitignore
+
+```bash
+# .gitignore — add:
 tools/fetch/manifest.json
+
+# then untrack (files stay on disk):
+git rm --cached tools/fetch/manifest.json
+git rm -r --cached tools/fetch/adapters/__pycache__
 ```
 
-### 1.2 Populate Manifest
+Nitpick while in `.gitignore`: the comment says "app.json … IS committed" but `.obsidian/app.json`
+is listed right below it. Fix the comment or the rule — they currently contradict each other.
 
-**Problem:** `tools/fetch/manifest.json` is empty `{}` — every run hashes all clippings as if new.
+## 2. Report unresolved wikilinks from `generate_views.py`
 
-**Fix:**
-```bash
-cd tools/fetch && python3 run.py
+**Verified problem:** the generator already resolves every wikilink (`resolve_links`,
+`generate_views.py:131`) and already styles broken ones red in the HTML (`generate_views.py:178`)
+— but it never *reports* them. The only way to notice a broken link today is to click around the
+generated site or run a full `/lint`.
+
+**Fix:** after generation, print the unresolved links alongside the existing summary line
+(`generate_views.py:818`):
+
+```
+Generated views/ from 42 notes (117 resolved links).
+  3 unresolved links:
+    - Concepts/Foo.md -> [[Bar]]
+    - ...
 ```
 
-### 1.3 Add File Type Filtering
+No flag needed — the data is already computed, so always print it. No non-zero exit code: there is
+no CI to consume it (per constraints), and a broken link should not abort view generation.
 
-**Problem:** `local` adapter hashes PDFs, EPUBs, images byte-by-byte even though `/compile` can only read text files.
+## 3. `tools/fetch/README.md`
 
-**Fix:** Add `include_extensions` to `sources.yaml`:
-```yaml
-sources:
-  - id: local_clippings
-    type: local
-    path: ../Clippings
-    include_extensions: [.md, .txt]
-```
+**Verified problem:** the module docstrings in `run.py`, `local.py`, `normalize.py`, and the
+`sources.yaml` header are individually thorough, but there is no single entry point tying them
+together.
 
-Modify `adapters/local.py` to filter by extension before hashing.
+**Fix:** a short README (half a page) covering:
 
-### 1.4 Create Documentation
+- The loop: `sources.yaml` → adapter → sha256 vs `manifest.json` → CHANGED list for `/compile`.
+- What `manifest.json` is (local state, gitignored, safe to delete — next run rebuilds it; the
+  only cost is one full re-report of CHANGED).
+- How to add a remote adapter (drop a module in `adapters/`, register in `ADAPTERS` in `run.py`,
+  add a block in `sources.yaml`) — pointing at the existing docstrings for detail.
+- Known limitation: removing/commenting a source block in `sources.yaml` makes all its manifest
+  entries report as "upstream deletions" on the next run (reported only, never deleted).
 
-**Problem:** `tools/fetch/` has no README.
+## 4. `/status` command (`.claude/commands/status.md`)
 
-**Fix:** Create `tools/fetch/README.md` explaining:
-- How `run.py` works
-- What `manifest.json` tracks
-- How to add remote adapters (future reference)
+**Purpose:** quick vault health snapshot without the cost of a full `/lint`. Everything it needs
+already exists:
+
+- **Counts** — Concepts (excluding `_INDEX.md`), Sources, Maps.
+- **Unprocessed clippings** — `python3 tools/fetch/run.py --dry-run` (the flag already exists;
+  its CHANGED output is exactly "clipped but not yet compiled").
+- **Time-bound claims** — row count from `Maps/Time-Bound Claims.md`.
+- **Recent activity** — notes with `updated:` within the last 7 days.
+
+Read-only; changes nothing.
 
 ---
 
-## Phase 2: Performance Improvements
+## Files to modify
 
-### 2.1 Streaming Hash for Large Files
-
-**Problem:** `local.py` uses `p.read_bytes()` — loads entire file into memory.
-
-**Fix:**
-```python
-def _hash_file(path: Path) -> str:
-    h = hashlib.sha256()
-    with path.open("rb") as f:
-        for chunk in iter(lambda: f.read(8192), b""):
-            h.update(chunk)
-    return h.hexdigest()
-```
-
-**Impact:** Negligible for small files, essential for large PDFs.
-
-### 2.2 Broken Link Detection
-
-**Problem:** Broken wikilinks only caught at `/lint` time.
-
-**Fix:** Add `--check-links` flag to `generate_views.py`:
-```bash
-python3 generate_views.py --check-links
-# Exits non-zero with list of unresolved [[links]]
-```
-
-### 2.3 Schema Validation for sources.yaml
-
-**Problem:** Typos in YAML are silently ignored.
-
-**Fix:** Add validation in `run.py`:
-```python
-REQUIRED_FIELDS = ["id", "type", "path"]
-
-def validate_source(src: dict) -> bool:
-    return all(k in src for k in REQUIRED_FIELDS)
-```
-
-### 2.4 Verbose Mode
-
-**Problem:** Scripts run silently — no progress indication.
-
-**Fix:** Add `--verbose` flag to both scripts:
-- `python3 tools/fetch/run.py --verbose`
-- `python3 generate_views.py --verbose`
-
-Logs per-file processing and summary statistics.
-
----
-
-## Phase 3: Command Enhancements
-
-### 3.1 `/status` Command
-
-**Purpose:** Quick vault statistics without full `/lint`.
-
-**Output:**
-- Concept/Source/Map counts
-- Unprocessed clippings count (from manifest diff)
-- Time-bound claims needing review
-- Recent changes (last 7 days, from `updated:` frontmatter)
-
-### 3.2 `/reindex` Command
-
-**Purpose:** Regenerate `_INDEX.md` after manual edits.
-
-**Behavior:**
-- Scan `Concepts/` folder
-- Rebuild `Concepts/_INDEX.md` with current concept list
-- Bump `updated:` date
-
----
-
-## Files to Modify
-
-| File | Changes |
-|------|---------|
-| `.gitignore` | Add `tools/fetch/manifest.json` |
-| `tools/fetch/manifest.json` | Populate via `run.py` |
-| `tools/fetch/sources.yaml` | Add `include_extensions` |
-| `tools/fetch/adapters/local.py` | Streaming hash + extension filter |
-| `tools/fetch/run.py` | Schema validation + `--verbose` |
-| `generate_views.py` | `--check-links` flag + `--verbose` |
+| File | Change |
+|------|--------|
+| `.gitignore` | Add `tools/fetch/manifest.json`; fix `.obsidian/app.json` comment/rule contradiction |
+| (git index) | `git rm --cached` manifest.json and `__pycache__` |
+| `generate_views.py` | Print unresolved-links report after generation |
+| `tools/fetch/README.md` | NEW — entry-point doc |
 | `.claude/commands/status.md` | NEW — quick stats command |
-| `.claude/commands/reindex.md` | NEW — regenerate index command |
-| `tools/fetch/README.md` | NEW — documentation |
 
 ---
 
-## Implementation Priority
+## Dropped from v1 (with reasons)
 
-| Phase | Effort | Impact |
-|-------|--------|--------|
-| **Phase 1** | ~30 min | High — fixes immediate gaps |
-| **Phase 2** | ~1-2 hrs | Medium — performance robustness |
-| **Phase 3** | ~30 min | Medium — workflow convenience |
-
----
-
-## Skipped Items (Per Constraints)
-
-- Test suite (`pytest`, `unittest`)
-- Remote adapters (GitHub, Confluence, web)
-- CI/CD (GitHub Actions)
-- Semantic search (requires dependencies)
-- New Python dependencies
-
----
-
-## Open Items
-
-- [ ] Confirm extension filter: `.md` only, or `.md` + `.txt`?
-- [ ] Confirm verbose output granularity (per-file vs summary)
+| v1 item | Verdict |
+|---------|---------|
+| Populate manifest | No-op — `Clippings/` contains only `.gitkeep`; the empty manifest is correct, not a bug |
+| Extension filtering (`include_extensions`) | Rejected — contradicts the documented extension-agnostic design in `sources.yaml`, assumed a `path:` key that doesn't exist, and would make edited PDFs invisible to change detection (the exact gap the tool closes) |
+| Schema validation for `sources.yaml` | Rejected as specced — `REQUIRED_FIELDS = ["id", "type", "path"]` fails the current valid config (which uses `glob`). Revisit only when remote adapters land, validating `type` against `ADAPTERS` and letting each adapter declare its own keys |
+| `--verbose` flags | Rejected — false premise; `run.py` prints per-file `[new]/[changed]` lines + summary (`run.py:193,212-227`), `generate_views.py` prints a summary (`:818`) |
+| Streaming hash | Deferred — real but not the 2-line patch specced: hashing happens in `run.py:173` on `item.content`, and the adapter loads full bytes into `FetchedItem` regardless, so it requires changing the `FetchedItem` contract. Revisit if/when large binaries actually land in `Clippings/` |
+| `/reindex` command | Rejected — built for "manual edits" to `Concepts/`, a workflow the system explicitly excludes (notes are LLM-authored; `_INDEX.md` is regenerated by `/compile` and reconciled by `/lint`) |

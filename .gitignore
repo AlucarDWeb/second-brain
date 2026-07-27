@@ -1,12 +1,10 @@
 # macOS
 .DS_Store
 
-# Obsidian — local UI state & cache (shared config app.json/appearance.json/core-plugins.json IS committed)
+# Obsidian — local UI state & cache (shared config app.json/appearance.json/core-plugins.json/graph.json IS committed)
 .obsidian/workspace.json
 .obsidian/workspace-mobile.json
 .obsidian/cache
-.obsidian/app.json
-.obsidian/graph.json
 .trash/
 
 # Claude Code — local/private settings only (.claude/commands/ IS committed; it's part of the system)
@@ -15,6 +13,9 @@
 # Python — compiled bytecode from tools/ (fetch pipeline)
 __pycache__/
 *.pyc
+
+# Fetch pipeline — local change-detection state (describes untracked Clippings/ content)
+tools/fetch/manifest.json
 
 # Content is ignored
 views/
