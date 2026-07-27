@@ -9,15 +9,17 @@ Optional argument — restrict to specific sources: $ARGUMENTS
 
 ## Steps
 
-1. **Find work.** List `Clippings/`. For each clipping, check whether a matching note exists in `Sources/`
-   (match on title/`clipping:` frontmatter). Build the set of *new or changed* sources to process.
+1. **Find work — never by listing folders.** Do NOT list `Clippings/` and cross-match it against
+   `Sources/` yourself; that's an O(clippings × sources) read the scripts already do deterministically.
    - **When `$ARGUMENTS` is given, treat it as the authoritative changed set** — the content-hash
      fetcher (`tools/fetch/run.py`) emits exactly the clippings whose bytes changed upstream. For each
      named clipping **re-read it and update its existing Source even if one already exists** (do not skip
      it as "already compiled"): refresh the Source's summary/claims, re-extract concepts, re-run the
      conflict / supersession / ⏳ rules against the new content, and **bump `updated:`** on every note you
      touch. This closes the "new-only" gap where an edited same-name doc used to go stale.
-   - When `$ARGUMENTS` is empty, process every clipping that has no corresponding note in `Sources/`.
+   - When `$ARGUMENTS` is empty, run `python3 tools/fetch/run.py --dry-run` (new/changed clippings) and
+     `python3 lint_mechanical.py --quiet` (its "Unprocessed clippings" section is the
+     clippings↔sources diff) and take the work set from their output.
    Report what you'll process before doing it.
 
 2. **Read each new source** fully from `Clippings/`.
@@ -26,14 +28,21 @@ Optional argument — restrict to specific sources: $ARGUMENTS
    frontmatter with url/author/published pulled from the clipping's frontmatter).
 
 4. **Extract atomic concepts.** For each distinct idea in the source:
-   - **Dedup lookup — read `Concepts/_INDEX.md` first.** It is a generated one-line-per-concept
-     index (name · aliases · definition). Scan it — names **and** aliases — for the incoming idea
-     before anything else. This is what keeps dedup working as the vault grows past what fits in one
-     read. If the index looks stale or missing, fall back to scanning `Concepts/` filenames + aliases
-     directly (and regenerate the index in step 7).
-   - If the index surfaces a candidate, open that Concept note to confirm before extending.
+   - **Dedup lookup — `rg` the index, never read it whole.** `Concepts/_INDEX.md` is a generated
+     one-line-per-concept index (name · aliases · definition), and it grows without bound — too big to
+     read as a step. Search it instead: `rg -i '<term>' Concepts/_INDEX.md` for each incoming idea's
+     plausible names/keywords (a couple of searches per idea — the code identifier, the product name,
+     the abbreviation). Each hit is one self-contained line. Only matching lines enter context.
+   - If a search surfaces a candidate, open that Concept note to confirm before extending. If searches
+     come up empty but the idea smells like it must exist, try `ls Concepts/ | rg -i '<term>'` before
+     concluding it's new. Never fall back to reading the whole index or folder.
    - **If it exists:** extend it — add nuance, add the new Source to its `## Sources`, add new `## Related`
      links, bump `updated:`. Do **not** create a duplicate.
+   - **`## Sources` cap (~10):** when adding a Source would push a Concept's `## Sources` past ~10
+     entries, keep the most significant and most recent sources up to ~10 and end the list with
+     `- _Full provenance: all Sources citing this concept are in the backlinks panel._` — Obsidian's
+     backlinks already show every citing Source, so nothing is lost. Provenance must not outgrow
+     content.
    - **If it's new:** create `Concepts/<Concept Name>.md` per the template.
    - Keep each note to a single concept. Five ideas → five notes.
    - **Conflict check (do not silently overwrite):** if a new claim contradicts what an existing Concept
@@ -56,9 +65,11 @@ Optional argument — restrict to specific sources: $ARGUMENTS
      `Maps/Index.md` point only at the domain Maps. Don't create domain Maps prematurely — only when the
      flat list stops being scannable.
 
-7. **Regenerate `Concepts/_INDEX.md`.** After creating/extending concepts, rewrite the generated dedup
-   index so it reflects the current set: one line per Concept — `**[[Name]]** · aliases · one-line definition`,
-   sorted, with an updated count and `updated:` date. `_INDEX.md` is **not itself a concept** — never link
+7. **Regenerate `Concepts/_INDEX.md` — by script, never by hand.** Run
+   `python3 generate_index.py` and report its one-line summary. It derives the index
+   deterministically from the Concept notes (filename, `aliases:`, first sentence of the definition
+   paragraph) — so a well-written first sentence and complete aliases in the Concept note ARE the
+   index entry. Never write index lines yourself. `_INDEX.md` is **not itself a concept** — never link
    to it from Sources/Maps and never treat it as a note to compile.
 
 8. **Regenerate the HTML visualization layer.** After all notes, Maps, and `_INDEX.md` are written,

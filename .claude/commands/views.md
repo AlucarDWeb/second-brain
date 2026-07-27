@@ -19,13 +19,17 @@ changes.
      metadata panel, and backlinks.
    - `views/assets/app.css` + `views/assets/graph.js` — shared, local, offline.
 
-2. **Report** the generator's summary line (note count + resolved links) and the path to open
-   (`views/index.html`). If the run flags any unexpected drop in resolved links vs. note count, note it —
-   it can signal broken wikilinks worth a `/lint`.
+2. **Open it.** Run `open views/index.html` so the refreshed site is immediately visible.
+
+3. **Report** the generator's summary line (note count + resolved links). If the run flags any
+   unexpected drop in resolved links vs. note count, note it — it can signal broken wikilinks worth a
+   `/lint`.
 
 ## Notes
 
 - The vault is the **source of truth**; `views/` is fully derived. The generator wipes and rebuilds
   `views/` each run — never hand-edit anything under it.
+- `views/` is **not** version-controlled (it's regenerable in seconds and bloats git history when
+  committed). If it's missing after a fresh clone, this command recreates it.
 - Zero third-party dependencies (Python 3 stdlib only); the output is fully offline and opens over
   `file://`.

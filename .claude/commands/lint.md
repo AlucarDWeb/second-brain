@@ -4,39 +4,63 @@ description: Health-check the wiki — orphans, broken links, duplicates, contra
 
 Run a health check over the wiki. Follow `CLAUDE.md` conventions. Optional focus: $ARGUMENTS
 
-**Start by reading `Concepts/_INDEX.md`** — the generated one-line-per-concept index (name · aliases ·
-definition). Use it as the working set for the whole-vault checks below instead of loading every note,
-and reconcile it against the actual `Concepts/` folder (see check 10). `_INDEX.md` is itself an index,
-not a concept — exclude it from orphan/unsupported/frontmatter checks.
+The lint is split in two: **mechanical checks run as a script** (deterministic, O(vault) in Python,
+O(1) in context), and **judgment checks run here** (meaning-level duplicates, contradictions, gaps).
+Never re-derive by hand what the script already computed.
 
-**Scale the whole-vault checks (4 & 6) by sharding, not brute force.** Duplicate and contradiction
-detection are inherently all-pairs. While the concept count is small enough to hold at once, compare
-across the full `_INDEX.md`. Once it isn't (**~150+ concepts**), shard: run duplicates/contradictions
-**within each Map first** (concepts in the same theme are the likely collisions), then do a lighter
-cross-Map pass driven by the `_INDEX.md` one-liners. Say in the output which mode you used.
+## Part 1 — mechanical (script)
 
-## Checks
+Run `python3 lint_mechanical.py --quiet` and relay its report. It covers broken wikilinks, orphans,
+Concepts in no Map, Sources citing no Concept, frontmatter problems, undated sources,
+⏳↔[[Time-Bound Claims]] drift, `_INDEX.md` drift, clippings↔sources reconciliation, and
+scale-threshold flags.
 
-1. **Broken wikilinks** — `[[links]]` pointing to non-existent notes. (Mechanical → fix directly: create a stub or correct the target.)
-2. **Orphans** — notes with no inbound or outbound links; Concepts not listed in any Map; Sources linking no Concept. (Report + propose links.)
-3. **Missing/stale frontmatter** — missing `type`, missing `created`, or `updated:` older than the last edit. (Mechanical → fix directly.)
-4. **Duplicate / near-duplicate concepts** — concept notes covering the same idea under different names. (Report; propose a merge — do NOT merge without human confirmation.)
-5. **Unsupported concepts** — Concept notes with an empty `## Sources`. (Report.)
-6. **Contradictions** — Sources/Concepts that disagree. (Report with both sides quoted — human review.) Where both sources carry a `published:` date, note which is newer and recommend it as current; if undated, say you can't rank them. Record unresolved conflicts in [[Time-Bound Claims]].
-7. **Time-bound claims** — resurface every `⏳`-marked line and every row in [[Time-Bound Claims]] for re-verification. Flag any `⏳` line missing from the tracker (or tracker rows whose `⏳` was removed from the note) as drift — mechanical → reconcile directly. Call out claims most likely stale (e.g. "planned" features, "currently"/"for now" states).
-8. **Undated sources** — Source notes with a blank `published:`. (Report — they block conflict ranking; recommend capturing the Confluence last-modified date.)
-9. **Gaps** — concepts referenced but never defined; questions the sources circle but never answer; obvious adjacent concepts missing. (Report; if useful, use web search to propose what to clip next — but do NOT add web content as fact; anything pulled in must first become a Source note via `/compile`.)
-10. **Concept index drift** — reconcile `Concepts/_INDEX.md` against the actual `Concepts/` folder: every
-    concept present exactly once, aliases and one-line definitions matching the notes, correct count.
-    (Mechanical → regenerate the index directly.)
-11. **Map-hub scale** — if `Maps/` has grown toward **~20 Maps** and `Maps/Index.md` is a long flat list,
-    flag that a domain-map tier is now warranted (see `/compile` step 6) and propose the grouping. (Report — this is a restructure, so recommend, don't apply.)
+Apply the mechanical fixes it points at directly:
+- broken links → correct the target (or create a stub if the concept should exist);
+- frontmatter → fill the missing field;
+- index drift → `python3 generate_index.py`;
+- ⏳ drift → add the missing tracker row, or move a finished row to [[Time-Bound Claims Archive]].
+Re-run the script after fixing to confirm it comes back clean.
+
+## Part 2 — judgment (LLM)
+
+These need meaning, not mechanics. **Shard once the script's scale-threshold check says to** (past
+~150 concepts): work Map-by-Map rather than across the whole vault at once. Below that, comparing
+across the full index is still tractable. Say in the output which mode you used.
+
+For each themed Map (get the list with `ls Maps/`):
+- Pull that Map's concept list, then `rg` those concept names out of `Concepts/_INDEX.md` (one line
+  each — never read the index whole) as the shard's working set.
+
+1. **Duplicate / near-duplicate concepts** — index lines describing the same idea under different
+   names. Confirm suspicions by opening the two notes. (Report; propose a merge — do NOT merge
+   without human confirmation.)
+2. **Contradictions** — claims in the notes that disagree. (Report with both sides quoted — human
+   review.) Where both sources carry a `published:` date, note which is newer and recommend it as
+   current; if undated, say you can't rank them. Record unresolved conflicts in
+   [[Time-Bound Claims]].
+3. **Stale time-bound claims** — read [[Time-Bound Claims]] (open rows only; resolved history lives in
+   [[Time-Bound Claims Archive]]) and call out the rows most likely stale ("planned" features,
+   "currently"/"for now" states, oldest `As of` dates). Recommend what to re-verify.
+4. **Unsupported concepts** — Concept notes with an empty `## Sources`. (Report.)
+
+When sharding, follow the per-Map passes with one **light cross-Map pass** for duplicates only:
+compare shard findings and any concept names that appear in multiple Maps; don't re-read notes for it.
+
+5. **Gaps** — concepts referenced but never defined; questions the sources circle but never answer;
+   obvious adjacent concepts missing. (Report; if useful, use web search to propose what to clip
+   next — but do NOT add web content as fact; anything pulled in must first become a Source note via
+   `/compile`.)
 
 ## Output
 
 Group findings by severity:
-- **Fixed automatically** (broken links, frontmatter, ⏳/tracker drift, concept-index drift) — list what you changed.
-- **Needs review** (duplicates, contradictions, time-bound claims likely stale, undated sources) — describe the issue and your recommendation.
-- **Opportunities** (gaps, suggested new concepts/connections, what to clip next) — a short prioritized list.
+- **Fixed automatically** (mechanical-script findings you fixed) — list what you changed, and confirm
+  the script re-run is clean.
+- **Needs review** (duplicates, contradictions, time-bound claims likely stale, undated sources) —
+  describe the issue and your recommendation.
+- **Opportunities** (gaps, suggested new concepts/connections, what to clip next) — a short
+  prioritized list.
 
-Apply only mechanical fixes directly; pause for confirmation before merges or large restructures.
+State which mode you used (whole-index or sharded, and which Maps). Apply only mechanical fixes
+directly; pause for confirmation before merges or large restructures.

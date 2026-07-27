@@ -123,37 +123,50 @@ Short framing of the theme.
 ## Rules of the system
 
 - **Atomicity** — one concept per Concept note. If a source raises five ideas, that's five concept notes (new or existing).
-- **Merge, don't duplicate** — before creating a concept, consult `Concepts/_INDEX.md` (the generated dedup index — see below) and search `Concepts/` for an existing note (including aliases). Extend the existing one and add the new source rather than making a near-duplicate. Surface suspected duplicates during `/lint`.
+- **Merge, don't duplicate** — before creating a concept, `rg -i` the incoming idea's plausible names against `Concepts/_INDEX.md` (the generated dedup index — see below); each hit is a self-contained line. Extend the existing note and add the new source rather than making a near-duplicate. Surface suspected duplicates during `/lint`.
 - **Aliases are load-bearing** — the `aliases:` field is what lets dedup work by name instead of full-text scan. Keep it complete: every plausible other name, abbreviation, code identifier, or phrasing for the concept goes in `aliases`. As the vault grows this is the single most important habit for keeping duplicates out.
 - **Everything links** — every Source links the Concepts it supports; every Concept lists its Sources and related Concepts; every Concept belongs to at least one Map. No orphans.
+- **`## Sources` caps at ~10** — a Concept's source list keeps the most significant and most recent sources up to ~10 entries, ending with `- _Full provenance: all Sources citing this concept are in the backlinks panel._` Obsidian's backlinks show every citing Source automatically; the in-note list is a curation, not a ledger, and provenance must not outgrow content.
 - **Cite the vault, not the web** — `/ask` answers strictly from notes in this vault and cites the Source/Concept notes used. If the vault can't answer, say so explicitly (and optionally propose what to clip next). Web search is only for `/lint` gap-filling, and anything pulled in must be saved as a Source first.
 - **Bump `updated:`** whenever you change a note.
 - **Surface, don't silently fix** — when `/lint` finds contradictions or gaps, report them for human review before large changes; small mechanical fixes (broken links, missing frontmatter) can be applied directly.
-- **Mark time-bound claims** — when a source states something explicitly provisional (wording like *currently, right now, for now, planned, will be, not yet, in a near future*), append a `⏳` marker to that line in the Concept note, e.g. `- ⏳ The new pricing tier is planned for next quarter.` Every `⏳` line must also be tracked in [[Time-Bound Claims]] (`Maps/Time-Bound Claims.md`) so `/lint` can resurface it for re-verification. When a later source confirms the claim changed, update the note, bump `updated:`, and remove the `⏳` + its tracker row.
+- **Mark time-bound claims** — when a source states something explicitly provisional (wording like *currently, right now, for now, planned, will be, not yet, in a near future*), append a `⏳` marker to that line in the Concept note, e.g. `- ⏳ The new pricing tier is planned for next quarter.` Every `⏳` line must also be tracked in [[Time-Bound Claims]] (`Maps/Time-Bound Claims.md`) so `/lint` can resurface it for re-verification. When a later source confirms the claim changed, update the note, bump `updated:`, remove the `⏳`, and move its tracker row to [[Time-Bound Claims Archive]] — the live tracker holds only open claims.
 - **Conflict-aware compile** — when a new source asserts something that contradicts an existing Concept, **never silently overwrite**. Report the conflict with both sides quoted. If both sources have a `published:` date, recommend the newer one as current (and update the note, noting the supersession); if either is undated, flag the disagreement but state you can't rank it. Record unresolved conflicts in [[Time-Bound Claims]].
 
 ## Scaling — how the structure holds as notes grow
 
 The vault lives on disk but is maintained through a context window, so the real limit isn't disk size —
-it's how much the LLM can see at once. `Sources/` and navigation scale freely; the parts that strain are
-the ones that need to see *everything* at once (dedup, contradiction detection, the Index hub). These
-mechanisms keep it graceful:
+it's how much the LLM can see at once. The governing principle: **mechanical O(vault) work runs in
+Python scripts (O(1) context); the LLM does only judgment** (meaning-level dedup, contradictions, gaps,
+synthesis). These mechanisms keep it graceful:
 
-- **`Concepts/_INDEX.md` — the generated dedup index.** One line per concept (name · aliases · one-line
-  definition). `/compile` reads it *before* creating any concept and regenerates it at the end; `/lint`
-  reads it as the working set and reconciles it. This is what lets dedup keep working once the full
-  concept set no longer fits in a single read. It is **not a concept** — never link to it, never compile it.
+- **`Concepts/_INDEX.md` — the script-generated dedup index.** One line per concept (name · aliases ·
+  one-line definition). It is derived deterministically by `python3 generate_index.py` from each
+  Concept's filename, `aliases:`, and the first sentence of its definition paragraph — so write that
+  first sentence to stand alone. **Never hand-write index lines; never read the index whole**: `rg -i`
+  names/aliases against it and consume only the matching lines. `/compile` runs the generator after
+  each batch. It is **not a concept** — never link to it, never compile it.
 - **Alias discipline** — see the rule above. Aliases are what make the index a reliable dedup key.
-- **Sharded `/lint`** — duplicate/contradiction checks are all-pairs. Under ~150 concepts, compare across
-  the whole index at once; past that, `/lint` shards the comparison **within each Map** first, then a
-  lighter cross-Map pass.
+- **Mechanical lint is a script.** `python3 lint_mechanical.py` computes broken links, orphans,
+  frontmatter problems, undated sources, ⏳↔tracker drift, index drift, clippings↔sources
+  reconciliation, and scale-threshold flags — in seconds, with zero vault reads in context. `/lint`
+  runs it first and keeps only the judgment checks.
+- **Sharded `/lint` judgment checks** — duplicate/contradiction detection is all-pairs. Under ~150
+  concepts, compare across the whole index at once; past that (the script flags it), shard **within
+  each Map** first, then a lighter cross-Map pass. Never whole-vault at once once sharding kicks in.
+- **`## Sources` caps at ~10** per Concept (see rule above) — the append-only growth vector on hot
+  concepts; backlinks carry full provenance for free.
+- **[[Time-Bound Claims]] stays open-only** — resolved rows move to [[Time-Bound Claims Archive]], so
+  the file every compile/status touches doesn't grow with history.
 - **Map tiering** — `Maps/Index.md` stays a flat list while there are ≤ ~15 themed Maps. Approaching ~20,
   introduce a **domain-map tier** (a few domain Maps grouping the themed ones; Index points only at
   domains). Don't build the tier before the flat list stops being scannable.
+- **`views/` is derived and not committed** — regenerate on demand with `/views`
+  (`python3 generate_views.py`); never hand-edit it.
 
-Rough thresholds: **~100 concepts** → the `_INDEX.md` becomes essential; **~150** → `/lint` sharding kicks
-in; **~20 Maps** → add the domain tier; **several hundred** → title/alias search should become the entry
-step for `/ask` and dedup rather than broad reads.
+Remaining thresholds: **~150 concepts** → `/lint` sharding becomes mandatory; **~20 Maps** → add the
+domain tier. Everything else (index search, mechanical lint, source caps) is already the standing
+regime — search-first is the entry step for `/ask` and `/compile` dedup at any vault size.
 
 ## Commands (scoped to this vault)
 
@@ -162,3 +175,5 @@ These live in `.claude/commands/` and only exist when Claude runs in this folder
 - **`/compile`** — read new/changed raw sources and build/update the wiki.
 - **`/lint`** — health check: orphans, broken links, duplicate concepts, gaps, contradictions, stale claims.
 - **`/ask <question>`** — answer a question from the vault, with citations; offer to file the answer back in.
+- **`/status`** — cheap read-only snapshot: counts, unprocessed clippings, open time-bound claims, recent activity.
+- **`/views`** — regenerate the HTML visualization layer (`views/`) and open it.
