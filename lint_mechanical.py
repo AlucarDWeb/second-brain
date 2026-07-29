@@ -255,7 +255,8 @@ def main() -> int:
     thresholds: list[str] = []
     if n_concepts > 150:
         thresholds.append(
-            f"{n_concepts} concepts > 150 — sharded duplicate/contradiction lint is MANDATORY"
+            f"{n_concepts} concepts > 150 — duplicate detection via `uv run semantic.py "
+            "pairs`; contradiction lint goes sharded Map-by-Map"
         )
     if len(themed_maps) >= 20:
         thresholds.append(f"{len(themed_maps)} themed Maps ≥ 20 — introduce the domain-map tier")

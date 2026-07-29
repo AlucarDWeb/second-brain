@@ -22,20 +22,33 @@ Apply the mechanical fixes it points at directly:
 - ⏳ drift → add the missing tracker row, or move a finished row to [[Time-Bound Claims Archive]].
 Re-run the script after fixing to confirm it comes back clean.
 
-## Part 2 — judgment (LLM)
+## Part 2 — judgment (LLM, pre-filtered)
 
-These need meaning, not mechanics. **Shard once the script's scale-threshold check says to** (past
-~150 concepts): work Map-by-Map rather than across the whole vault at once. Below that, comparing
-across the full index is still tractable. Say in the output which mode you used.
+These need meaning, not mechanics — but candidate *selection* for duplicates is mechanical and runs
+as a script.
 
-For each themed Map (get the list with `ls Maps/`):
-- Pull that Map's concept list, then `rg` those concept names out of `Concepts/_INDEX.md` (one line
-  each — never read the index whole) as the shard's working set.
+1. **Duplicate / near-duplicate concepts — via the semantic pre-filter, not an all-pairs scan.**
+   Run `uv run semantic.py pairs` (it refreshes its embedding cache automatically; the cache lives
+   under `.claude/cache/semantic/`, derived and regenerable). It prints the most semantically
+   similar concept pairs that do **not** already wikilink each other — the dedup signal —
+   most-similar first. For each candidate pair, open both notes and judge:
+   - **same idea** → report; propose a merge — do NOT merge without human confirmation;
+   - **distinct but related** → add `## Related` links both ways (mechanical — apply directly,
+     bump `updated:`);
+   - **genuinely unrelated** → leave it (note it in the report; recurring false positives are a
+     reason to raise `--threshold`).
+   The cosine matrix *is* the whole-vault comparison at O(1) context cost, so this check never
+   needs sharding. The pre-filter sees name + aliases + first-sentence definition (the `_INDEX.md`
+   identity line), so a weak first sentence hides a note from it — one more reason that sentence
+   must stand alone.
 
-1. **Duplicate / near-duplicate concepts** — index lines describing the same idea under different
-   names. Confirm suspicions by opening the two notes. (Report; propose a merge — do NOT merge
-   without human confirmation.)
-2. **Contradictions** — claims in the notes that disagree. (Report with both sides quoted — human
+For the remaining checks: **shard once the script's scale-threshold check says to** (past ~150
+concepts) — work Map-by-Map (pull each Map's concept list, then `rg` those names out of
+`Concepts/_INDEX.md`, one line each) rather than across the whole vault at once. Below that,
+working across the full index is still tractable. Say in the output which mode you used.
+
+2. **Contradictions** — claims in the notes that disagree. Start with any `pairs` candidates from
+   step 1 — similar-but-unlinked concepts are where contradictions hide. (Report with both sides quoted — human
    review.) Where both sources carry a `published:` date, note which is newer and recommend it as
    current; if undated, say you can't rank them. Record unresolved conflicts in
    [[Time-Bound Claims]].
@@ -43,9 +56,6 @@ For each themed Map (get the list with `ls Maps/`):
    [[Time-Bound Claims Archive]]) and call out the rows most likely stale ("planned" features,
    "currently"/"for now" states, oldest `As of` dates). Recommend what to re-verify.
 4. **Unsupported concepts** — Concept notes with an empty `## Sources`. (Report.)
-
-When sharding, follow the per-Map passes with one **light cross-Map pass** for duplicates only:
-compare shard findings and any concept names that appear in multiple Maps; don't re-read notes for it.
 
 5. **Gaps** — concepts referenced but never defined; questions the sources circle but never answer;
    obvious adjacent concepts missing. (Report; if useful, use web search to propose what to clip

@@ -34,8 +34,12 @@ Optional argument — restrict to specific sources: $ARGUMENTS
      plausible names/keywords (a couple of searches per idea — the code identifier, the product name,
      the abbreviation). Each hit is one self-contained line. Only matching lines enter context.
    - If a search surfaces a candidate, open that Concept note to confirm before extending. If searches
-     come up empty but the idea smells like it must exist, try `ls Concepts/ | rg -i '<term>'` before
-     concluding it's new. Never fall back to reading the whole index or folder.
+     come up empty but the idea smells like it must exist, try `ls Concepts/ | rg -i '<term>'`, then the
+     **semantic fallback**: `uv run semantic.py search "<idea name + one-line definition>" --top 5` —
+     it matches by meaning, so it catches existing concepts whose name *and* aliases both diverge from
+     the incoming phrasing (the case `rg` can't). Treat its hits as candidates to open and confirm, same
+     as index hits. Only after all three come up empty is the concept new. Never fall back to reading the
+     whole index or folder.
    - **If it exists:** extend it — add nuance, add the new Source to its `## Sources`, add new `## Related`
      links, bump `updated:`. Do **not** create a duplicate.
    - **`## Sources` cap (~10):** when adding a Source would push a Concept's `## Sources` past ~10
@@ -66,7 +70,9 @@ Optional argument — restrict to specific sources: $ARGUMENTS
      flat list stops being scannable.
 
 7. **Regenerate `Concepts/_INDEX.md` — by script, never by hand.** Run
-   `python3 generate_index.py` and report its one-line summary. It derives the index
+   `python3 generate_index.py` and report its one-line summary. Then refresh the semantic
+   embedding cache the same way: `uv run semantic.py index` — incremental (content-hash keyed),
+   so it only embeds the concepts this batch created or changed. It derives the index
    deterministically from the Concept notes (filename, `aliases:`, first sentence of the definition
    paragraph) — so a well-written first sentence and complete aliases in the Concept note ARE the
    index entry. Never write index lines yourself. `_INDEX.md` is **not itself a concept** — never link

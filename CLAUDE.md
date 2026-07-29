@@ -151,9 +151,19 @@ synthesis). These mechanisms keep it graceful:
   frontmatter problems, undated sources, ⏳↔tracker drift, index drift, clippings↔sources
   reconciliation, and scale-threshold flags — in seconds, with zero vault reads in context. `/lint`
   runs it first and keeps only the judgment checks.
-- **Sharded `/lint` judgment checks** — duplicate/contradiction detection is all-pairs. Under ~150
-  concepts, compare across the whole index at once; past that (the script flags it), shard **within
-  each Map** first, then a lighter cross-Map pass. Never whole-vault at once once sharding kicks in.
+- **Semantic pre-filter is a script** (`semantic.py`, run via `uv run` — it declares its own deps).
+  It embeds each Concept's identity line (name + aliases + first-sentence definition) with a small
+  local model into a derived, content-hash-incremental cache (`.claude/cache/semantic/`).
+  `pairs` prints the most similar concept pairs that don't wikilink each other — the whole-vault
+  duplicate/contradiction candidate list at O(1) context; `search "<phrase>"` is the by-meaning
+  fallback for `/ask` retrieval and `/compile` dedup when name/alias search misses. It only
+  *nominates* — every merge/conflict call stays with the LLM. Not a database: vectors are a `.npz`
+  file, brute-force cosine, fully regenerable.
+- **Sharded `/lint` contradiction checks** — duplicate detection is handled whole-vault by
+  `semantic.py pairs` (the cosine matrix is the all-pairs comparison), so it never needs sharding.
+  The **contradiction** pass still reads note bodies: under ~150 concepts work across the whole
+  index at once; past that (the script flags it), shard **within each Map**, starting from any
+  `pairs` candidates.
 - **`## Sources` caps at ~10** per Concept (see rule above) — the append-only growth vector on hot
   concepts; backlinks carry full provenance for free.
 - **[[Time-Bound Claims]] stays open-only** — resolved rows move to [[Time-Bound Claims Archive]], so
@@ -164,8 +174,9 @@ synthesis). These mechanisms keep it graceful:
 - **`views/` is derived and not committed** — regenerate on demand with `/views`
   (`python3 generate_views.py`); never hand-edit it.
 
-Remaining thresholds: **~150 concepts** → `/lint` sharding becomes mandatory; **~20 Maps** → add the
-domain tier. Everything else (index search, mechanical lint, source caps) is already the standing
+Remaining thresholds: **~150 concepts** → `/lint` contradiction sharding becomes mandatory (duplicate
+detection stays whole-vault via the semantic pre-filter); **~20 Maps** → add the domain tier. Everything
+else (index search, mechanical lint, the semantic pre-filter, source caps) is already the standing
 regime — search-first is the entry step for `/ask` and `/compile` dedup at any vault size.
 
 ## Commands (scoped to this vault)

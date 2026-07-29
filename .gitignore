@@ -23,3 +23,7 @@ Clippings/
 Concepts/
 Maps/
 Sources/
+
+# Semantic embedding cache — derived from Concepts/ (which is itself ignored);
+# rebuilt on demand by `uv run semantic.py index`
+.claude/cache/
