@@ -1,4 +1,5 @@
 ---
+name: lint
 description: Health-check the wiki — orphans, broken links, duplicates, contradictions, time-bound claims, gaps
 ---
 

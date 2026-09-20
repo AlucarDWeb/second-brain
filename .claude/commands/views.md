@@ -1,4 +1,5 @@
 ---
+name: views
 description: Regenerate the HTML visualization layer (views/) from the vault
 ---
 

@@ -1,4 +1,5 @@
 ---
+name: status
 description: Quick vault health snapshot — counts, unprocessed clippings, time-bound claims, recent activity
 ---
 

@@ -1,4 +1,5 @@
 ---
+name: compile
 description: Read raw sources in Clippings/ and build/update the wiki (Sources, Concepts, Maps)
 ---
 

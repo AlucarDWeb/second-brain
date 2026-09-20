@@ -1,4 +1,5 @@
 ---
+name: ask
 description: Answer a question using only this vault's notes, with citations; offer to file the answer back in
 ---
 
