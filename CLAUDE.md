@@ -180,8 +180,14 @@ synthesis). These mechanisms keep it graceful:
   containment on primary names, and a numeric guard
   so templated names (`Disegno di Legge C-2` vs `C-8`) never merge. Modes: `lookup` (the gate before
   creating), `--audit` (unlinked suspect pairs), `--alias-gaps` (concepts with <2 aliases),
-  `--alias-collisions` (one alias claimed by two concepts). Measured on this vault: `--audit` at 0.7
-  returns 1 pair; the semantic `pairs` at 0.75 returned 40 with no true duplicate among them.
+  `--alias-collisions` (one alias claimed by two concepts), `--exhaustive` (all pairs, for control).
+  `--audit` runs on an inverted index over rare tokens **plus 5-character stems** (so word-family
+  variants like *Finanziarista* / *Finanziarizzazione* still meet): on this vault it compares 3,440 of
+  48,516 pairs in ~0.1 s and returns 1 candidate at 0.7, against 40 junk candidates from the semantic
+  `pairs` at 0.75. On 2 000 concepts it compares 0.9% of pairs in ~0.25 s; the script prints the share
+  examined and warns when the index is doing too little work, in which case `--exhaustive` is the
+  control (~13 s at 2 000). Recall cost measured here: at 0.5 the index returns 24 of the 25 pairs the
+  exhaustive scan finds, and the one it drops is a false positive.
 - **Semantic similarity is retrieval only** (`semantic.py`, run via `uv run` — it declares its own deps).
   It embeds each Concept's identity line into a content-hash-incremental `.npz` cache and answers
   `search "<phrase>"` for `/ask` and as the last-resort dedup fallback in `/compile`. It is **not** a
