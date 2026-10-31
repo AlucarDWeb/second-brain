@@ -44,6 +44,13 @@ Never edit files in `Clippings/` — it's the immutable record of what was actua
 
 ## Note conventions
 
+**Language is always Italian.** All vault notes (Sources, Concepts, Maps) are written in **Italian**,
+regardless of the source language — definitions, key points, framing and Map names in Italian. Keep proper
+names and canonical technical titles in their original form since they are wikilink targets (e.g.
+`[[Online Safety Act 2023]]`, `[[Five Eyes]]`), and add Italian `aliases` where useful. Keep a Source note's
+title as the original article title (it identifies the clipping) but write its body in Italian. Verbatim
+quotes of key claims may keep the original language in quotes alongside an Italian rendering.
+
 **Filenames are the link targets.** Obsidian wikilinks resolve by filename, so name files exactly as the
 concept/source is referred to. Use Title Case, spaces allowed, no path prefix in links (`[[A Concept Name]]`).
 
@@ -122,9 +129,23 @@ Short framing of the theme.
 
 ## Rules of the system
 
-- **Atomicity** — one concept per Concept note. If a source raises five ideas, that's five concept notes (new or existing).
+- **Atomicity, with a promotion threshold** — one idea per Concept note, but a note is *created* only
+  when the idea earns it: it must either **recur across ≥2 independent sources** or be the **load-bearing
+  thesis of one source** — and that thesis clause is **one promotion per source, maximum**. Everything else stays as a bullet under the
+  Source's `## Key claims`, with its citation — nothing is lost, and the graph stops growing with the number
+  of articles read instead of the number of ideas that actually have weight. Measured baseline on this
+  vault before the rule: 7.6 concepts touched and ~2.3 created per source. Measured on a 10-essay batch with the
+  cap set at 2 instead of 1: 1.90 new concepts and 2.80 touched per source — so the cap, not the recurrence
+  clause, is what sets the rate, and 2 was too permissive. With the cap at 1 the same batch projects 1.2/source
+  (12 concepts instead of 19). A promoted concept still needs a second source eventually — if it never gets
+  one, it was a detail. **Recurrence (≥2 independent sources) is the only reason to go past one concept for a
+  source.**
 - **Merge, don't duplicate** — before creating a concept, `rg -i` the incoming idea's plausible names against `Concepts/_INDEX.md` (the generated dedup index — see below); each hit is a self-contained line. Extend the existing note and add the new source rather than making a near-duplicate. Surface suspected duplicates during `/lint`.
 - **Aliases are load-bearing** — the `aliases:` field is what lets dedup work by name instead of full-text scan. Keep it complete: every plausible other name, abbreviation, code identifier, or phrasing for the concept goes in `aliases`. As the vault grows this is the single most important habit for keeping duplicates out.
+  **At least two aliases, one of them in the other language.** Name-based dedup cannot cross languages by
+  itself — `Funzione di Clearing` and `Clearing function` only match because the alias is there — so every
+  Italian note carries the English key and vice versa. `python3 dedup_check.py --alias-gaps` lists the
+  violations; treat a one-alias concept as a concept that is invisible to dedup.
 - **Everything links** — every Source links the Concepts it supports; every Concept lists its Sources and related Concepts; every Concept belongs to at least one Map. No orphans.
 - **`## Sources` caps at ~10** — a Concept's source list keeps the most significant and most recent sources up to ~10 entries, ending with `- _Full provenance: all Sources citing this concept are in the backlinks panel._` Obsidian's backlinks show every citing Source automatically; the in-note list is a curation, not a ledger, and provenance must not outgrow content.
 - **Cite the vault, not the web** — `/ask` answers strictly from notes in this vault and cites the Source/Concept notes used. If the vault can't answer, say so explicitly (and optionally propose what to clip next). Web search is only for `/lint` gap-filling, and anything pulled in must be saved as a Source first.
@@ -151,14 +172,29 @@ synthesis). These mechanisms keep it graceful:
   frontmatter problems, undated sources, ⏳↔tracker drift, index drift, clippings↔sources
   reconciliation, and scale-threshold flags — in seconds, with zero vault reads in context. `/lint`
   runs it first and keeps only the judgment checks.
-- **Semantic pre-filter is a script** (`semantic.py`, run via `uv run` — it declares its own deps).
-  It embeds each Concept's identity line (name + aliases + first-sentence definition) with a small
-  local model into a derived, content-hash-incremental cache (`.claude/cache/semantic/`).
-  `pairs` prints the most similar concept pairs that don't wikilink each other — the whole-vault
-  duplicate/contradiction candidate list at O(1) context; `search "<phrase>"` is the by-meaning
-  fallback for `/ask` retrieval and `/compile` dedup when name/alias search misses. It only
-  *nominates* — every merge/conflict call stays with the LLM. Not a database: vectors are a `.npz`
-  file, brute-force cosine, fully regenerable.
+- **The dedup gate is deterministic** (`dedup_check.py`, stdlib only, ~3 s over 312 concepts). Lexical
+  comparison of names + aliases: IDF-weighted token cosine (weights derived from the Concept names, so
+  there is **no stopword list and no language assumption** — this vault measures zero structural tokens,
+  so function words keep a small weight instead of being removed; that is why the containment and
+  identical-form rules, not the score alone, carry the verdict), char trigrams as the fuzzy signal,
+  containment on primary names, and a numeric guard
+  so templated names (`Disegno di Legge C-2` vs `C-8`) never merge. Modes: `lookup` (the gate before
+  creating), `--audit` (unlinked suspect pairs), `--alias-gaps` (concepts with <2 aliases),
+  `--alias-collisions` (one alias claimed by two concepts), `--exhaustive` (all pairs, for control).
+  `--audit` runs on an inverted index over rare tokens **plus 5-character stems** (so word-family
+  variants like *Finanziarista* / *Finanziarizzazione* still meet): on this vault it compares 3,440 of
+  48,516 pairs in ~0.1 s and returns 1 candidate at 0.7, against 40 junk candidates from the semantic
+  `pairs` at 0.75. On 2 000 concepts it compares 0.9% of pairs in ~0.25 s; the script prints the share
+  examined and warns when the index is doing too little work, in which case `--exhaustive` is the
+  control (~13 s at 2 000). Recall cost measured here: at 0.5 the index returns 24 of the 25 pairs the
+  exhaustive scan finds, and the one it drops is a false positive.
+- **Semantic similarity is retrieval only** (`semantic.py`, run via `uv run` — it declares its own deps).
+  It embeds each Concept's identity line into a content-hash-incremental `.npz` cache and answers
+  `search "<phrase>"` for `/ask` and as the last-resort dedup fallback in `/compile`. It is **not** a
+  duplicate detector: measured here, unrelated concepts sit at ~0.88 cosine and nothing real scores above
+  0.84 — the model saturates on short identity lines, so `pairs` cannot separate duplicates from
+  neighbours. Use `search --top 5` (rank 1 is reliable, the tail drags in unrelated domains) and never
+  treat its output as a duplicate list. Brute-force cosine over a `.npz`, fully regenerable — not a database.
 - **Sharded `/lint` contradiction checks** — duplicate detection is handled whole-vault by
   `semantic.py pairs` (the cosine matrix is the all-pairs comparison), so it never needs sharding.
   The **contradiction** pass still reads note bodies: under ~150 concepts work across the whole
@@ -175,7 +211,8 @@ synthesis). These mechanisms keep it graceful:
   (`python3 generate_views.py`); never hand-edit it.
 
 Remaining thresholds: **~150 concepts** → `/lint` contradiction sharding becomes mandatory (duplicate
-detection stays whole-vault via the semantic pre-filter); **~20 Maps** → add the domain tier. Everything
+detection stays whole-vault via `dedup_check.py --audit`, which is O(n²) on strings but still seconds);
+**~20 Maps** → add the domain tier. Everything
 else (index search, mechanical lint, the semantic pre-filter, source caps) is already the standing
 regime — search-first is the entry step for `/ask` and `/compile` dedup at any vault size.
 

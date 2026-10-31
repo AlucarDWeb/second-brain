@@ -24,10 +24,12 @@ Answer the following question **strictly from this vault** (Concepts/, Sources/,
       when the question demonstrably needs more (say so in the answer). Don't transitively expand the
       graph.
    4. **Semantic fallback when the index search misses.** If 2–4 `rg` variants find nothing, run
-      `uv run semantic.py search "<the question's key phrase>"` — it ranks concepts by meaning
+      `uv run semantic.py search "<the question's key phrase>" --top 5` — it ranks concepts by meaning
       (local embeddings, derived cache that refreshes itself), so it finds notes whose name and
-      aliases just don't share the question's vocabulary. Treat its top hits as the shortlist and
-      read them as in step 2. It searches concept identity lines only, never Sources.
+      aliases just don't share the question's vocabulary. **Cap at 5**: rank 1 is reliable, below that
+      the scores flatten and unrelated domains leak in (measured: a finance question's 2nd/3rd hits were
+      a neurology and a nutrition note). Treat the top hits as the shortlist and read them as in step 2.
+      It searches concept identity lines only, never Sources.
    5. Only fall back to a broader `rg` across `Concepts/`/`Sources/` **bodies** if both the index
       search and the semantic fallback come up empty or the question isn't concept-shaped.
 3. **Synthesize across notes.** The value is connecting ideas from multiple sources — point out agreements,
