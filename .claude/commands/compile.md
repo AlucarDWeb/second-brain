@@ -28,19 +28,28 @@ Optional argument — restrict to specific sources: $ARGUMENTS
 3. **Write a Source note** in `Sources/` per the template in `CLAUDE.md` (summary, key claims, concepts touched,
    frontmatter with url/author/published pulled from the clipping's frontmatter).
 
-4. **Extract atomic concepts.** For each distinct idea in the source:
-   - **Dedup lookup — `rg` the index, never read it whole.** `Concepts/_INDEX.md` is a generated
+4. **Decide what earns a Concept.** For each distinct idea in the source, apply the promotion threshold
+   from `CLAUDE.md` **before** any lookup: does it recur across ≥2 independent sources, or is it the
+   load-bearing thesis of this source? **One promotion per source, maximum** — a second concept from the same
+   source is allowed only when it recurs across ≥2 sources in the batch. Everything else is a bullet
+   under the Source's `## Key claims` — it keeps its citation there and costs the graph nothing.
+   A source that yields 6+ new concepts is a signal the threshold is being ignored, not a productive source.
+   For each idea that passes:
+   - **Dedup gate — `python3 dedup_check.py "<candidate name>" --aliases "<alias1>; <alias2>"`.** Lexical,
+     deterministic, ~1 s, no model: it ranks existing concepts by IDF-weighted name/alias overlap and flags
+     containment (`Too Big to Fail` inside `Too Big to Fail come Basis Etica` is a duplicate, not a neighbour).
+     Anything ≥0.55 gets opened and confirmed; an `identical` hit is a duplicate by definition.
+   - **`rg` the index too — never read it whole.** `Concepts/_INDEX.md` is a generated
      one-line-per-concept index (name · aliases · definition), and it grows without bound — too big to
      read as a step. Search it instead: `rg -i '<term>' Concepts/_INDEX.md` for each incoming idea's
      plausible names/keywords (a couple of searches per idea — the code identifier, the product name,
      the abbreviation). Each hit is one self-contained line. Only matching lines enter context.
-   - If a search surfaces a candidate, open that Concept note to confirm before extending. If searches
-     come up empty but the idea smells like it must exist, try `ls Concepts/ | rg -i '<term>'`, then the
-     **semantic fallback**: `uv run semantic.py search "<idea name + one-line definition>" --top 5` —
-     it matches by meaning, so it catches existing concepts whose name *and* aliases both diverge from
-     the incoming phrasing (the case `rg` can't). Treat its hits as candidates to open and confirm, same
-     as index hits. Only after all three come up empty is the concept new. Never fall back to reading the
-     whole index or folder.
+   - If a search surfaces a candidate, open that Concept note to confirm before extending. If the gate and
+     the index come up empty but the idea smells like it must exist, try `ls Concepts/ | rg -i '<term>'`, then
+     the **semantic fallback**: `uv run semantic.py search "<idea name + one-line definition>" --top 5` —
+     retrieval only, not a duplicate verdict: rank 1 is trustworthy, the tail brings in unrelated domains,
+     so open the hit and decide. Only after all of these come up empty is the concept new. Never fall back
+     to reading the whole index or folder.
    - **If it exists:** extend it — add nuance, add the new Source to its `## Sources`, add new `## Related`
      links, bump `updated:`. Do **not** create a duplicate.
    - **`## Sources` cap (~10):** when adding a Source would push a Concept's `## Sources` past ~10
@@ -49,7 +58,10 @@ Optional argument — restrict to specific sources: $ARGUMENTS
      backlinks already show every citing Source, so nothing is lost. Provenance must not outgrow
      content.
    - **If it's new:** create `Concepts/<Concept Name>.md` per the template.
-   - Keep each note to a single concept. Five ideas → five notes.
+   - Keep each note to a single concept — and only for ideas that passed the promotion threshold. A note
+     must carry **≥2 aliases, one in the other language** (English key for an Italian note, and vice versa):
+     name dedup cannot cross languages on its own, the alias is the bridge. Run
+     `python3 dedup_check.py --alias-gaps` at the end of the batch and fix what it lists.
    - **Conflict check (do not silently overwrite):** if a new claim contradicts what an existing Concept
      already says, stop and surface it with both sides quoted. If both sources have a `published:` date,
      recommend the newer as current and update the note (noting the supersession + bumping `updated:`);
